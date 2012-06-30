@@ -1,0 +1,76 @@
+load GenomeTools;
+load sys;
+
+routine create_example_features()
+{
+  #{ construct the example features #}
+  seqid = gt_str_new_cstr("chromosome_21");
+
+  #{ construct a gene on the forward strand with two exons #}
+  gene = gt_feature_node_new(seqid, "gene", 100, 900, GT_STRAND_FORWARD);
+  exon = gt_feature_node_new(seqid, "exon", 100, 200, GT_STRAND_FORWARD);
+  gt_feature_node_add_child(gene, exon);
+  intron = gt_feature_node_new(seqid, "intron", 201, 799, GT_STRAND_FORWARD);
+  gt_feature_node_add_child(gene, intron);
+  exon = gt_feature_node_new(seqid, "exon", 800, 900, GT_STRAND_FORWARD);
+  gt_feature_node_add_child(gene, exon);
+
+  #{ construct a single-exon gene on the reverse strand
+     (within the intron of the forward strand gene) #}
+  gene2 = gt_feature_node_new(seqid, "gene", 400, 600, GT_STRAND_REVERSE);
+  exon = gt_feature_node_new(seqid, "exon", 400, 600, GT_STRAND_REVERSE);
+  gt_feature_node_add_child(gene2, exon);
+
+  return {gene, gene2};
+}
+
+routine handle_error( err :GtError )
+{
+  io.writef("error writing canvas %s\n", gt_error_get(err));
+  sys.exit(EXIT_FAILURE);
+}
+
+routine draw_example_features(features :list<GtFeatureNode>, style_file = '', output_file = '')
+{
+  range = ( 1, 1000 ); #{ the genomic range to draw #}
+
+  err = gt_error_new();
+
+  #{ create style #}
+  style = gt_style_new(err);
+  if (!style) handle_error(err);
+
+  #{ load style file #}
+  if (gt_style_load_file(style, style_file, err)) handle_error(err);
+
+  #{ create diagram #}
+  diagram = gt_diagram_new_from_array(features, range, style);
+
+  #{ create layout with given width, determine resulting image height #}
+  layout = gt_layout_new(diagram, 600, style, err);
+  if (!layout) handle_error(err);
+  (ret, height) = gt_layout_get_height(layout, 0, err);
+  if (ret) handle_error(err);
+
+  #{ create PNG canvas #}
+  canvas = gt_canvas_cairo_file_new(style, GT_GRAPHICS_PNG, 600, height, none, err);
+  if (!canvas) handle_error(err);
+
+  #{ sketch layout on canvas #}
+  if (gt_layout_sketch(layout, canvas, err)) handle_error(err);
+
+  #{ write canvas to file #}
+  if (gt_canvas_cairo_file_to_file(canvas, output_file, err)) {
+    handle_error(err);
+  }
+}
+
+routine main( style_file :string, output_file :string )
+#{
+Usage: %P style_file output_file
+#}
+{
+  features = create_example_features();
+  draw_example_features(features, style_file, output_file);
+  return EXIT_SUCCESS;
+}
